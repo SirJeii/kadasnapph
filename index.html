@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KadaSnap</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Bootstrap JS (needed for Modals) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        body { background-color: #212529; color: white; overflow-x: hidden; }
+        .mirror-x { transform: scaleX(-1); }
+        .cursor-pointer { cursor: pointer; }
+        
+        /* Flash Animation */
+        @keyframes flash {
+            0% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+        .animate-flash { animation: flash 0.5s ease-out forwards; }
+        
+        /* Pulse Animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .8; transform: scale(1.05); }
+        }
+        .animate-pulse { animation: pulse 2s infinite; }
+
+        /* Bounce Animation */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+            50% { transform: translateY(0); animation-timing-function: cubic-bezier(0,0,0.2,1); }
+        }
+        .animate-bounce { animation: bounce 1s infinite; }
+
+        /* Strip Browsing Animations */
+        .strip-container {
+            transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+        }
+        .slide-out-left {
+            transform: translateX(-50px) rotate(-2deg) !important;
+            opacity: 0;
+        }
+        .slide-out-right {
+            transform: translateX(50px) rotate(2deg) !important;
+            opacity: 0;
+        }
+        .slide-in-start-left {
+            transform: translateX(-50px) !important;
+            opacity: 0;
+        }
+        .slide-in-start-right {
+            transform: translateX(50px) !important;
+            opacity: 0;
+        }
+
+        /* Review Grid Styles */
+        .review-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.5rem;
+            aspect-ratio: 1.63; /* Match capture ratio */
+            border: 2px solid #495057;
+            transition: border-color 0.2s;
+        }
+        .review-card:hover {
+            border-color: #ffc107;
+        }
+        .review-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .review-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .review-card:hover .review-overlay {
+            opacity: 1;
+        }
+
+        /* Active dot style */
+        .dot-active {
+            background-color: white !important;
+            animation: bounce 1s infinite;
+        }
+        .dot-filled {
+            background-color: #198754 !important; /* success green */
+        }
+        .dot-empty {
+            background-color: #6c757d !important; /* secondary gray */
+        }
+
+        /* Utilities */
+        .hidden { display: none !important; }
+        
+        /* Print Area Default (Hidden on Screen) */
+        #print-area { display: none; }
+
+        @media print {
+            html, body {
+                width: 4in;
+                height: 6in;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                background: white !important;
+            }
+
+            body * {
+                visibility: hidden !important;
+            }
+
+            #print-area,
+            #print-area * {
+                visibility: visible !important;
+            }
+
+            #print-area {
+                display: block !important;
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 4in !important;
+                height: 6in !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+                z-index: 9999 !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+                break-after: avoid-page !important;
+                break-inside: avoid-page !important;
+            }
+
+            img.print-img {
+                display: block !important;
+                width: 4in !important;
+                height: 6in !important;
+                object-fit: cover !important;
+            }
+
+            @page {
+                size: 4in 6in;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- VIEW: SETUP (HOME) -->
+    <div id="view-setup" class="container min-vh-100 d-flex flex-column align-items-center justify-content-center py-5">
+        <div class="text-center mb-5">
+            <h1 class="display-3 fw-bold mb-3 text-warning">KadaSnap</h1>
+            <p class="text-white-50 fs-5">Configure your event settings below.</p>
+        </div>
+
+        <div class="card bg-dark border-secondary shadow-lg w-100" style="max-width: 500px;">
+            <div class="card-body p-4">
+                <!-- Preview -->
+                <div class="bg-black rounded overflow-hidden border border-secondary mb-4 position-relative" style="aspect-ratio: 540/330;">
+                    <video id="preview-video" autoplay playsinline muted class="w-100 h-100 object-fit-cover mirror-x"></video>
+                </div>
+
+                <!-- Controls -->
+                <div class="mb-4">
+                    <label class="form-label text-white-50 small fw-bold">Camera Settings</label>
+                    <select id="camera-select" class="form-select bg-secondary text-white border-0 mb-3"></select>
+                    
+                    <!-- Zoom Control -->
+                    <div id="zoom-control-group" class="mb-3 hidden">
+                        <label for="zoom-slider" class="form-label text-white-50 small fw-bold d-flex justify-content-between">
+                            <span>Zoom</span>
+                            <span id="zoom-value" class="fw-normal">1x</span>
+                        </label>
+                        <input type="range" class="form-range" id="zoom-slider">
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="mirror-toggle" checked>
+                        <label class="form-check-label text-white" for="mirror-toggle">Mirror Camera Output</label>
+                    </div>
+
+                    <label class="form-label text-white-50 small fw-bold">Choose Layout</label>
+                    <div class="btn-group w-100 mb-3" role="group">
+                        <input type="radio" class="btn-check" name="layout-mode" id="layout-strip" autocomplete="off" checked>
+                        <label class="btn btn-outline-secondary text-white" for="layout-strip">
+                            <i data-lucide="columns" class="me-2"></i>Strip (2x6)
+                        </label>
+
+                        <input type="radio" class="btn-check" name="layout-mode" id="layout-landscape" autocomplete="off">
+                        <label class="btn btn-outline-secondary text-white" for="layout-landscape">
+                            <i data-lucide="image" class="me-2"></i>Landscape (4x6)
+                        </label>
+                    </div>
+
+                    <label class="form-label text-white-50 small fw-bold">Customize Event Logo</label>
+                    <div class="btn-group w-100 mb-3">
+                        <input type="radio" class="btn-check" name="logo-mode" id="mode-text" autocomplete="off" checked>
+                        <label class="btn btn-outline-secondary text-white" for="mode-text">Text Label</label>
+
+                        <input type="radio" class="btn-check" name="logo-mode" id="mode-image" autocomplete="off">
+                        <label class="btn btn-outline-secondary text-white" for="mode-image">Upload Logo</label>
+                    </div>
+
+                    <div id="input-text-group" class="mb-3">
+                        <input type="text" id="event-text" class="form-control bg-secondary text-white border-0 py-3" value="SUMMER BASH 2025" placeholder="Event Name">
+                    </div>
+                    <div id="input-image-group" class="hidden mb-3">
+                        <input type="file" id="logo-upload" accept="image/*" class="d-none">
+                        <label for="logo-upload" class="d-flex align-items-center justify-content-center w-100 py-3 bg-secondary bg-opacity-25 border border-secondary border-dashed rounded cursor-pointer text-white-50">
+                            <i data-lucide="upload" class="me-2"></i> <span id="logo-status">Choose Image...</span>
+                        </label>
+                    </div>
+
+                    <!-- Account Status & Verification -->
+                    <label class="form-label text-white-50 small fw-bold">Account Status</label>
+                    <div class="mb-3 p-3 bg-secondary bg-opacity-25 rounded border border-secondary d-flex justify-content-between align-items-center">
+                        <div id="login-status" class="text-warning small fw-bold">
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span> Verifying...
+                        </div>
+                        <div id="admin-link-container" class="d-none d-flex gap-2">
+                            <button id="btn-logout" class="btn btn-sm btn-outline-light">Switch</button>
+                            <a href="admin.html" target="_blank" class="btn btn-sm btn-outline-warning">Admin</a>
+                        </div>
+                    </div>
+
+                    <!-- QR Link Configuration -->
+                    <label class="form-label text-white-50 small fw-bold">QR Link</label>
+                    <div class="mb-3">
+                        <input type="url" id="qr-link-input" class="form-control bg-secondary text-white border-0 py-3" placeholder="https://your-link.com/gallery">
+                        <div class="form-text text-white-50 small mt-1">This link will be encoded in the QR code on the result screen.</div>
+                    </div>
+
+                    <!-- Auto Save Configuration -->
+                    <label class="form-label text-white-50 small fw-bold">Save Locations</label>
+                    <div class="d-grid gap-2">
+                        <button id="btn-select-folder-1" class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2 py-3 border-secondary text-white">
+                            <i data-lucide="folder-open"></i> <span id="folder-status-1">Select Primary Folder</span>
+                        </button>
+                        <button id="btn-select-folder-2" class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2 py-3 border-secondary text-white">
+                            <i data-lucide="folder-plus"></i> <span id="folder-status-2">Select Backup Folder (Optional)</span>
+                        </button>
+                    </div>
+                    <div class="form-text text-white-50 small mt-1">Images will be saved to all selected folders automatically.</div>
+                </div>
+
+                <button id="btn-launch" class="btn btn-primary w-100 py-3 rounded-3 fs-5 fw-bold d-flex align-items-center justify-content-center gap-2 shadow" disabled>
+                    <i data-lucide="maximize" class="me-2"></i> Launch Booth
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW: BOOTH START (ATTRACT SCREEN) -->
+    <div id="view-attract" class="hidden position-fixed top-0 start-0 w-100 h-100 bg-black d-flex flex-column align-items-center justify-content-center overflow-hidden">
+        <div class="position-absolute top-0 start-0 w-100 h-100 opacity-50">
+            <video id="attract-video" autoplay playsinline muted class="w-100 h-100 object-fit-cover mirror-x"></video>
+        </div>
+        <div class="position-relative z-1 d-flex flex-column align-items-center">
+            <h1 id="display-event-name" class="display-1 fw-bold text-white mb-5 text-center" style="text-shadow: 0 4px 4px rgba(0,0,0,0.8)">EVENT</h1>
+            <button id="btn-start" class="btn btn-light btn-lg rounded-pill px-5 py-3 fs-2 fw-bold shadow animate-pulse">
+                Touch to Start
+            </button>
+        </div>
+    </div>
+
+    <!-- VIEW: CAPTURE (COUNTDOWN & FLASH) -->
+    <div id="view-capture" class="hidden position-fixed top-0 start-0 w-100 h-100 bg-black z-3 d-flex flex-column align-items-center justify-content-center">
+        <div class="position-relative w-100 border border-4 border-dark rounded-4 overflow-hidden shadow-lg" style="max-width: 800px; aspect-ratio: 540/330;">
+            <video id="capture-video" autoplay playsinline muted class="w-100 h-100 object-fit-cover mirror-x"></video>
+            
+            <div id="flash-overlay" class="position-absolute top-0 start-0 w-100 h-100 bg-white hidden" style="pointer-events: none;"></div>
+
+            <!-- Countdown: Positioned Bottom Right -->
+            <div id="countdown-overlay" class="position-absolute bottom-0 end-0 p-4 hidden" style="pointer-events: none;">
+                <div id="countdown-text" class="text-white fw-bold animate-pulse" style="font-size: 8rem; text-shadow: 0 0 15px rgba(0,0,0,0.8); line-height: 1;">3</div>
+            </div>
+            
+            <div id="dots-container" class="position-absolute bottom-0 start-0 w-100 mb-4 d-flex justify-content-center gap-3">
+                <!-- Dots injected via JS -->
+            </div>
+        </div>
+        <div class="mt-4 fs-3 fw-medium text-white text-uppercase">
+            Pose for photo <span id="current-shot-num">1</span> of <span id="total-shots-num">4</span>
+        </div>
+    </div>
+
+    <!-- VIEW: REVIEW (NEW) -->
+    <div id="view-review" class="hidden container min-vh-100 d-flex flex-column align-items-center justify-content-center py-5">
+        <h2 class="display-5 fw-bold mb-4 text-warning">Review Your Photos</h2>
+        <p class="text-white-50 mb-4">Click any photo to retake it.</p>
+        
+        <div id="review-grid" class="row g-4 justify-content-center w-100 mb-5" style="max-width: 1200px;">
+            <!-- Photos Injected Here via JS -->
+        </div>
+
+        <button id="btn-confirm-strip" class="btn btn-success btn-lg fw-bold px-5 py-3 shadow fs-3">
+            <i data-lucide="check-circle" class="me-2"></i> Print Photo
+        </button>
+    </div>
+
+    <!-- VIEW: PROCESSING -->
+    <div id="view-processing" class="hidden position-fixed top-0 start-0 w-100 h-100 bg-dark z-3 d-flex flex-column align-items-center justify-content-center">
+        <div class="text-primary mb-4 spinner-border" style="width: 4rem; height: 4rem;"></div>
+        <h2 class="fs-2 fw-bold animate-pulse">Developing Photos...</h2>
+    </div>
+
+    <!-- VIEW: RESULT -->
+    <div id="view-result" class="hidden min-vh-100 d-flex flex-column align-items-center justify-content-center p-3 bg-dark">
+        <div class="container" style="max-width: 1200px;">
+            <div class="row g-5 align-items-center">
+                
+                <!-- Left Column: Image + Carousel Controls -->
+                <div class="col-lg-7 d-flex flex-column align-items-center">
+                    
+                    <!-- Strip Image Container -->
+                    <div id="strip-container" class="strip-container bg-white p-2 shadow-lg rounded mb-4" style="transform: rotate(1deg);">
+                        <img id="final-image" src="" alt="Strip" class="img-fluid border" style="max-height: 60vh; width: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                    </div>
+
+                    <!-- Customization Card -->
+                    <div class="card bg-secondary bg-opacity-10 border-secondary w-100 mb-4" style="max-width: 450px;">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-center gap-2 mb-3 small fw-bold text-white-50">
+                                <i data-lucide="layout-template"></i> Choose Theme
+                            </div>
+                            
+                            <div class="d-flex align-items-center justify-content-between bg-dark rounded-4 p-2 border border-secondary">
+                                <button id="btn-prev-style" class="btn btn-link text-white p-0 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                                    <i data-lucide="chevron-left" style="width: 28px; height: 28px;"></i>
+                                </button>
+                                
+                                <div class="text-center flex-grow-1">
+                                    <span id="current-style-name" class="fw-bold fs-4 d-block text-white mb-1">Classic White</span>
+                                    <div class="d-flex justify-content-center gap-1" id="style-dots">
+                                        <!-- Dots injected by JS -->
+                                    </div>
+                                </div>
+
+                                <button id="btn-next-style" class="btn btn-link text-white p-0 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                                    <i data-lucide="chevron-right" style="width: 28px; height: 28px;"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Actions & Details -->
+                <div class="col-lg-5">
+                    
+                    <!-- Static QR Code Display -->
+                    <div id="result-qr-container" class="d-flex align-items-center mb-4 p-3 bg-white text-dark rounded shadow-sm border" style="max-width: 100%; width: fit-content;">
+                        <div id="static-qr-code"></div>
+                        <div class="ms-3">
+                            <h5 class="fw-bold mb-1">Get Your Photos</h5>
+                            <p class="mb-0 small text-muted">Scan to view Google Drive Gallery</p>
+                        </div>
+                    </div>
+
+                    <h2 class="display-5 fw-bold mb-2">Ready to Print!</h2>
+                    <p class="text-white-50 mb-4" id="print-desc">Your photo is ready.</p>
+                    
+                    <div id="save-toast" class="alert alert-success d-flex align-items-center hidden" role="alert">
+                        <i data-lucide="check-circle" class="me-2"></i>
+                        <div>Image saved!</div>
+                    </div>
+
+                    <div id="auto-save-toast" class="alert alert-info d-flex align-items-center hidden" role="alert">
+                        <i data-lucide="check-circle" class="me-2"></i>
+                        <div>Auto-saved to folder!</div>
+                    </div>
+
+                    <div class="d-grid gap-3">
+                        <button onclick="window.print()" class="btn btn-primary btn-lg fw-bold d-flex align-items-center justify-content-center gap-2 shadow">
+                            <i data-lucide="printer"></i> Print Photo
+                        </button>
+                        
+                        <button id="btn-save-strip" class="btn btn-success fw-bold py-3 d-flex align-items-center justify-content-center gap-2 shadow">
+                            <i data-lucide="save"></i> Save Image
+                        </button>
+
+                        <button id="btn-new-session" class="btn btn-outline-light fw-semibold py-2 d-flex align-items-center justify-content-center gap-2 mt-2">
+                            <i data-lucide="refresh-ccw"></i> New Session
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Area -->
+    <div id="print-area">
+        <img id="print-img" class="print-img">
+    </div>
+
+    <!-- Hidden Canvas -->
+    <canvas id="crop-canvas" class="hidden"></canvas>
+    <canvas id="final-canvas" class="hidden"></canvas>
+
+
+    <!-- STRICT LOGIN MODAL (No Cancel or Close Buttons) -->
+    <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-white border-secondary shadow-lg">
+                <div class="modal-header border-0 pb-0 justify-content-center mt-3">
+                    <h4 class="modal-title fw-bold text-warning d-flex align-items-center">
+                        <i data-lucide="lock" class="me-2"></i> Login Required
+                    </h4>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-center text-white-50 mb-4">You must verify your account to access the photobooth.</p>
+                    <div class="mb-3">
+                        <label class="form-label text-white-50">Username</label>
+                        <input id="login-username" type="text" class="form-control bg-secondary text-white border-0 py-2" placeholder="Enter username">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-white-50">Password</label>
+                        <input id="login-password" type="password" class="form-control bg-secondary text-white border-0 py-2" placeholder="Enter password">
+                    </div>
+                    <div id="login-error" class="alert alert-danger d-none" role="alert">
+                        Invalid credentials or subscription expired
+                    </div>
+                    <button id="btn-do-login" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+                        Authenticate & Unlock
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+        import {
+            getFirestore,
+            collection,
+            query,
+            orderBy,
+            where,
+            getDocs,
+            doc,
+            getDoc
+        } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+        // Firebase Configuration (Intact)
+      const firebaseConfig = {
+  apiKey: "AIzaSyDAdCmovji9jlloPOKMxBC0WFhvSqHVtJQ",
+  authDomain: "photobooth-2026.firebaseapp.com",
+  projectId: "photobooth-2026",
+  storageBucket: "photobooth-2026.firebasestorage.app",
+  messagingSenderId: "510404188428",
+  appId: "1:510404188428:web:57296a9addce0fe8f81129"
+};
+
+        const firebaseApp = initializeApp(firebaseConfig);
+        const db = getFirestore(firebaseApp);
+        const accountsRef = collection(db, "accounts");
+
+        lucide.createIcons();
+
+        // State
+        let stream = null;
+        let photos = [];
+        let config = {
+            text: "SUMMER BASH 2025",
+            logo: null,
+            mode: 'text',
+            deviceId: null,
+            styleIndex: 0,
+            layout: 'strip', // 'strip' or 'landscape'
+            mirror: true,
+            accountId: '',
+            qrLink: "https://drive.google.com/drive/folders/1lEarwDNVilpc9xGBAwzHJfg4ZYTRTmoB?usp=sharing"
+        };
+        let saveDirectoryHandle1 = null;
+        let saveDirectoryHandle2 = null;
+        let subscriptionCountdownTimer = null;
+
+        // --- STRIP STYLES DEFINITION ---
+        const stripStyles = [
+            {
+                name: 'Classic White',
+                textColor: '#222',
+                borderColor: '#eee',
+                cutLine: '#ccc',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, w, h);
+                }
+            },
+            {
+                name: 'Cinema Film',
+                textColor: '#fff',
+                borderColor: '#333',
+                cutLine: '#555',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#111';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.fillStyle = '#fff';
+                    const holeW = 15;
+                    const holeH = 10;
+                    const spacing = 30;
+                    // Generic sprockets
+                    for(let y=20; y<h; y+=spacing) {
+                         ctx.fillRect(10, y, holeW, holeH);
+                         ctx.fillRect(w-25, y, holeW, holeH);
+                    }
+                    if(w > h) { // Landscape extra sprockets
+                        for(let x=20; x<w; x+=spacing) {
+                            ctx.fillRect(x, 10, holeH, holeW);
+                            ctx.fillRect(x, h-25, holeH, holeW);
+                        }
+                    }
+                }
+            },
+            {
+                name: 'Galaxy',
+                textColor: '#fff',
+                borderColor: 'rgba(255,255,255,0.3)',
+                cutLine: '#4b0082',
+                draw: (ctx, w, h) => {
+                    const grd = ctx.createLinearGradient(0, 0, 0, h);
+                    grd.addColorStop(0, "#0f0c29");
+                    grd.addColorStop(0.5, "#302b63");
+                    grd.addColorStop(1, "#24243e");
+                    ctx.fillStyle = grd;
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.fillStyle = '#fff';
+                    for(let i=0; i<150; i++) {
+                        ctx.beginPath();
+                        ctx.arc(Math.random()*w, Math.random()*h, Math.random()*2, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                }
+            },
+            {
+                name: 'Love Hearts',
+                textColor: '#b91c1c',
+                borderColor: '#fecaca',
+                cutLine: '#fca5a5',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#fff1f2';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.fillStyle = 'rgba(253, 164, 175, 0.4)';
+                    for(let i=0; i<100; i++) {
+                        const x = Math.random() * w;
+                        const y = Math.random() * h;
+                        const size = 10 + Math.random() * 20;
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.bezierCurveTo(x - size/2, y - size/2, x - size, y + size/3, x, y + size);
+                        ctx.bezierCurveTo(x + size, y + size/3, x + size/2, y - size/2, x, y);
+                        ctx.fill();
+                    }
+                }
+            },
+            {
+                name: 'Hazard',
+                textColor: '#000',
+                borderColor: '#000',
+                cutLine: '#000',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#facc15';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.fillStyle = '#000';
+                    const max = Math.max(w, h) * 1.5;
+                    for(let i=-max; i<max; i+=60) {
+                        ctx.beginPath();
+                        ctx.moveTo(i, 0);
+                        ctx.lineTo(i+30, 0);
+                        ctx.lineTo(i-h+30, h);
+                        ctx.lineTo(i-h, h);
+                        ctx.fill();
+                    }
+                }
+            },
+            {
+                name: 'Retro Pop',
+                textColor: '#b45309',
+                borderColor: '#fbbf24',
+                cutLine: '#f59e0b',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#fffbeb';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.fillStyle = '#fcd34d';
+                    for(let y=0; y<h; y+=40) {
+                        for(let x=0; x<w; x+=40) {
+                            ctx.beginPath();
+                            ctx.arc(x+20, y+20, 10, 0, Math.PI*2);
+                            ctx.fill();
+                        }
+                    }
+                }
+            },
+            {
+                name: 'Neon Night',
+                textColor: '#0f0',
+                borderColor: '#0f0',
+                cutLine: '#0f0',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+                    ctx.lineWidth = 2;
+                    for(let i=0; i<w; i+=60) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,h); ctx.stroke(); }
+                    for(let i=0; i<h; i+=60) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(w,i); ctx.stroke(); }
+                }
+            },
+            {
+                name: 'Picnic',
+                textColor: '#b91c1c',
+                borderColor: 'rgba(185, 28, 28, 0.2)',
+                cutLine: '#fca5a5',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+                    const size = 40;
+                    for(let x=0; x<w; x+=size) ctx.fillRect(x, 0, size/2, h);
+                    for(let y=0; y<h; y+=size) ctx.fillRect(0, y, w, size/2);
+                }
+            },
+            {
+                name: 'Blueprint',
+                textColor: '#fff',
+                borderColor: 'rgba(255,255,255,0.5)',
+                cutLine: '#93c5fd',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#1e3a8a';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.lineWidth = 1;
+                    const grid = 40;
+                    for(let x=0; x<w; x+=grid) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+                    for(let y=0; y<h; y+=grid) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+                }
+            },
+            {
+                name: 'Elegant Marble',
+                textColor: '#374151',
+                borderColor: '#e5e7eb',
+                cutLine: '#9ca3af',
+                draw: (ctx, w, h) => {
+                    ctx.fillStyle = '#f9fafb';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+                    ctx.lineWidth = 50;
+                    ctx.lineCap = 'round';
+                    for(let i=0; i<20; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(Math.random()*w, Math.random()*h);
+                        ctx.bezierCurveTo(Math.random()*w, Math.random()*h, Math.random()*w, Math.random()*h, Math.random()*w, Math.random()*h);
+                        ctx.stroke();
+                    }
+                }
+            }
+        ];
+
+        // DOM Elements
+        const views = {
+            setup: document.getElementById('view-setup'),
+            attract: document.getElementById('view-attract'),
+            capture: document.getElementById('view-capture'),
+            review: document.getElementById('view-review'),
+            processing: document.getElementById('view-processing'),
+            result: document.getElementById('view-result')
+        };
+        const videoEls = [
+            document.getElementById('preview-video'), 
+            document.getElementById('attract-video'), 
+            document.getElementById('capture-video')
+        ];
+
+        // Init
+        async function init() {
+            loadConfig();
+            await getCameras();
+            startCamera();
+            setupStyleCarousel();
+            setupStaticQR();
+            
+            // Check verification status before granting access
+            const isVerified = await verifyCurrentAccount();
+            const urlParams = new URLSearchParams(window.location.search);
+
+            if (!isVerified) {
+                // If not verified, MUST show strict login modal
+                document.getElementById('login-status').innerText = "Not Logged In";
+                const modal = new bootstrap.Modal(document.getElementById('loginModal'));
+                modal.show();
+            } else {
+                // Verified successfully
+                updateLoginUISuccess(config.currentAccountData);
+                if (urlParams.get('mode') === 'booth') {
+                    switchView('attract');
+                }
+            }
+        }
+        
+        // Account Verification Helper
+        function getAccountRemainingMs(account) {
+            if (!account) return 0;
+            if (typeof account.subscriptionExpiresAt === 'number' && account.subscriptionExpiresAt > 0) {
+                return account.subscriptionExpiresAt - Date.now();
+            }
+            const fallbackDays = Math.max(0, Number(account.subscriptionDays ?? 0));
+            const fallbackHours = Math.max(0, Math.min(23, Number(account.subscriptionHours ?? 0)));
+            if (fallbackDays <= 0 && fallbackHours <= 0) return 0;
+            return (fallbackDays * 24 + fallbackHours) * 60 * 60 * 1000;
+        }
+
+        function formatRemainingMs(ms) {
+            if (ms <= 0) return "Expired";
+            const totalSec = Math.floor(ms / 1000);
+            const d = Math.floor(totalSec / 86400);
+            const h = Math.floor((totalSec % 86400) / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            return `${d}d ${h}h ${m}m ${s}s`;
+        }
+
+        function startSubscriptionCountdown(account) {
+            if (subscriptionCountdownTimer) {
+                clearInterval(subscriptionCountdownTimer);
+                subscriptionCountdownTimer = null;
+            }
+
+            const loginStatus = document.getElementById('login-status');
+            const render = () => {
+                const remainingMs = getAccountRemainingMs(account);
+                if (remainingMs <= 0) {
+                    loginStatus.innerHTML = `<i data-lucide="alert-triangle" class="me-1"></i> Subscription expired`;
+                    loginStatus.classList.remove('text-success', 'text-warning');
+                    loginStatus.classList.add('text-danger');
+                    lucide.createIcons();
+                    if (subscriptionCountdownTimer) {
+                        clearInterval(subscriptionCountdownTimer);
+                        subscriptionCountdownTimer = null;
+                    }
+                    return;
+                }
+
+                loginStatus.innerHTML = `<i data-lucide="check-circle" class="me-1"></i> Logged in: ${account.name} <span class="badge bg-success ms-1">${formatRemainingMs(remainingMs)}</span>`;
+                loginStatus.classList.remove('text-warning', 'text-danger');
+                loginStatus.classList.add('text-success');
+                lucide.createIcons();
+            };
+
+            render();
+            subscriptionCountdownTimer = setInterval(render, 1000);
+        }
+
+        async function verifyCurrentAccount() {
+            if (!config.accountId) return false;
+            
+            try {
+                const snap = await getDoc(doc(db, 'accounts', config.accountId));
+                if (snap.exists()) {
+                    const account = snap.data();
+                    const remainingMs = getAccountRemainingMs(account);
+                    if (remainingMs > 0) {
+                        config.currentAccountData = account; // Temporarily hold data for UI
+                        return true;
+                    }
+                }
+                return false;
+            } catch (err) {
+                console.error("Account verification failed", err);
+                return false;
+            }
+        }
+        
+        function switchView(viewName) {
+            Object.values(views).forEach(el => el.classList.add('hidden'));
+            views[viewName].classList.remove('hidden');
+            if(viewName === 'attract' || viewName === 'capture' || viewName === 'setup') {
+                startCamera(config.deviceId);
+            }
+        }
+
+        // QR Code Setup
+        function setupStaticQR() {
+            const qrContainer = document.getElementById('static-qr-code');
+            const fallbackLink = "https://drive.google.com/drive/folders/1lEarwDNVilpc9xGBAwzHJfg4ZYTRTmoB?usp=sharing";
+            const qrLink = (config.qrLink || '').trim() || fallbackLink;
+
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+                text: qrLink,
+                width: 200,
+                height: 200
+            });
+        }
+
+        // Camera Logic
+        async function getCameras() {
+            try {
+                // Request perm and store the stream temporarily
+                const tempStream = await navigator.mediaDevices.getUserMedia({ video: true }); 
+                
+                // CRITICAL FIX: Stop the tracks of the temporary stream immediately so the hardware 
+                // is not locked when startCamera() is called right afterwards.
+                tempStream.getTracks().forEach(t => t.stop());
+                
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const select = document.getElementById('camera-select');
+                select.innerHTML = '';
+                videoDevices.forEach((d, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || `Camera ${i+1}`;
+                    select.appendChild(opt);
+                });
+                select.onchange = (e) => startCamera(e.target.value);
+            } catch(e) { console.error("Error getting camera devices:", e); }
+        }
+
+        async function startCamera(deviceId = null) {
+            if (stream && stream.active) {
+                const track = stream.getVideoTracks()[0];
+                const settings = track.getSettings();
+                if (!deviceId || (settings.deviceId === deviceId)) {
+                    videoEls.forEach(v => {
+                        if (v.srcObject !== stream) {
+                            v.srcObject = stream;
+                            v.play().catch(e => console.log("Play error", e));
+                        }
+                    });
+                    setupZoomControls(track);
+                    return; 
+                }
+            }
+
+            if(stream) stream.getTracks().forEach(t => t.stop());
+            
+            const constraints = {
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+            };
+            
+            // CRITICAL FIX: Only enforce facingMode if we don't have an exact device ID,
+            // to prevent conflicting constraints that cause NotReadableError on some browsers.
+            if(deviceId) {
+                constraints.video.deviceId = { exact: deviceId };
+            } else {
+                constraints.video.facingMode = 'user';
+            }
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoEls.forEach(v => v.srcObject = stream);
+                if(deviceId) config.deviceId = deviceId;
+                
+                const track = stream.getVideoTracks()[0];
+                setupZoomControls(track);
+
+            } catch(err) { console.error("Cam error", err); }
+        }
+
+        function setupZoomControls(track) {
+            const capabilities = track.getCapabilities();
+            const settings = track.getSettings();
+            
+            const zoomControl = document.getElementById('zoom-control-group');
+            const zoomSlider = document.getElementById('zoom-slider');
+            const zoomValue = document.getElementById('zoom-value');
+
+            if ('zoom' in capabilities) {
+                zoomControl.classList.remove('hidden');
+                zoomSlider.min = capabilities.zoom.min;
+                zoomSlider.max = capabilities.zoom.max;
+                zoomSlider.step = capabilities.zoom.step;
+                zoomSlider.value = settings.zoom || capabilities.zoom.min;
+                zoomValue.innerText = `${zoomSlider.value}x`;
+                
+                zoomSlider.oninput = async (e) => {
+                    const val = e.target.value;
+                    zoomValue.innerText = `${val}x`;
+                    try {
+                        await track.applyConstraints({ advanced: [{ zoom: val }] });
+                    } catch(err) { console.error("Zoom failed", err); }
+                };
+            } else {
+                zoomControl.classList.add('hidden');
+            }
+        }
+
+        // Setup Logic
+        document.getElementById('mode-text').onchange = () => {
+            config.mode = 'text';
+            document.getElementById('input-text-group').classList.remove('hidden');
+            document.getElementById('input-image-group').classList.add('hidden');
+        };
+        document.getElementById('mode-image').onchange = () => {
+            config.mode = 'image';
+            document.getElementById('input-text-group').classList.add('hidden');
+            document.getElementById('input-image-group').classList.remove('hidden');
+        };
+
+        // Mirror Toggle Logic
+        document.getElementById('mirror-toggle').onchange = (e) => {
+            config.mirror = e.target.checked;
+            applyMirror();
+        };
+
+        function applyMirror() {
+            const method = config.mirror ? 'add' : 'remove';
+            videoEls.forEach(v => v.classList[method]('mirror-x'));
+        }
+        
+        // Layout Logic
+        document.getElementById('layout-strip').onchange = () => config.layout = 'strip';
+        document.getElementById('layout-landscape').onchange = () => config.layout = 'landscape';
+
+        document.getElementById('event-text').oninput = (e) => config.text = e.target.value;
+        document.getElementById('qr-link-input').oninput = (e) => config.qrLink = e.target.value;
+        
+        document.getElementById('logo-upload').onchange = (e) => {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    config.logo = evt.target.result;
+                    document.getElementById('logo-status').innerText = "Logo Uploaded!";
+                    document.getElementById('logo-status').classList.add('text-success');
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        // FOLDER SELECTION LOGIC
+        const handleFolderSelect = async (btnId, statusId, isPrimary) => {
+            if ('showDirectoryPicker' in window) {
+                try {
+                    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                    const statusSpan = document.getElementById(statusId);
+                    statusSpan.innerText = `Saving to: ${handle.name}`;
+                    statusSpan.classList.add('text-success', 'fw-bold');
+                    
+                    if (isPrimary) saveDirectoryHandle1 = handle;
+                    else saveDirectoryHandle2 = handle;
+                } catch (err) {
+                    console.log("Folder selection cancelled or failed", err);
+                }
+            } else {
+                alert("Your browser does not support automatic folder saving. Please use Chrome or Edge.");
+            }
+        };
+
+        document.getElementById('btn-select-folder-1').onclick = () => handleFolderSelect('btn-select-folder-1', 'folder-status-1', true);
+        document.getElementById('btn-select-folder-2').onclick = () => handleFolderSelect('btn-select-folder-2', 'folder-status-2', false);
+
+        async function saveToFolder(handle, blob, filename) {
+            if (!handle) return false;
+            try {
+                const fileHandle = await handle.getFileHandle(filename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                return true;
+            } catch (e) {
+                console.error(`Failed to save to folder: ${handle.name}`, e);
+                return false;
+            }
+        }
+
+        // LOGIN SYSTEM
+        async function performLogin() {
+            const username = document.getElementById('login-username').value.trim().toLowerCase();
+            const password = document.getElementById('login-password').value;
+            const btn = document.getElementById('btn-do-login');
+            
+            if (!username || !password) {
+                document.getElementById('login-error').textContent = 'Please enter both username and password';
+                document.getElementById('login-error').classList.remove('d-none');
+                return;
+            }
+            
+            document.getElementById('login-error').classList.add('d-none');
+            
+            // UI Loading state
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> Authenticating...`;
+            btn.disabled = true;
+            
+            try {
+                const snap = await getDocs(query(accountsRef, where('username', '==', username)));
+                if (snap.empty) {
+                    throw new Error('Invalid credentials');
+                }
+                
+                const accountDoc = snap.docs[0];
+                const account = { id: accountDoc.id, ...accountDoc.data() };
+                
+                if (account.password !== password) {
+                    throw new Error('Invalid credentials');
+                }
+                
+                const remainingMs = getAccountRemainingMs(account);
+                if (remainingMs <= 0) {
+                    throw new Error('Subscription has expired. Please contact admin.');
+                }
+                
+                // Login Success!
+                config.accountId = account.id;
+                localStorage.setItem('pb_config', JSON.stringify(config));
+                
+                updateLoginUISuccess(account);
+                
+                const modal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+                if(modal) modal.hide();
+                
+            } catch (err) {
+                console.error('Login failed', err);
+                document.getElementById('login-error').textContent = err.message;
+                document.getElementById('login-error').classList.remove('d-none');
+            } finally {
+                // Reset UI Loading state
+                btn.innerHTML = `Authenticate & Unlock`;
+                btn.disabled = false;
+            }
+        }
+        
+        function updateLoginUISuccess(account) {
+            startSubscriptionCountdown(account);
+            
+            // Keep admin links hidden even after successful login
+            document.getElementById('admin-link-container').classList.add('d-none');
+            
+            // ENABLE Launch Button
+            const btnLaunch = document.getElementById('btn-launch');
+            btnLaunch.disabled = false;
+            btnLaunch.classList.remove('btn-secondary');
+            btnLaunch.classList.add('btn-primary');
+        }
+        
+        // Bind login clicks
+        document.getElementById('btn-do-login').onclick = performLogin;
+        
+        document.getElementById('btn-logout').onclick = () => {
+            if (subscriptionCountdownTimer) {
+                clearInterval(subscriptionCountdownTimer);
+                subscriptionCountdownTimer = null;
+            }
+
+            config.accountId = '';
+            localStorage.setItem('pb_config', JSON.stringify(config));
+            
+            // Reset UI
+            document.getElementById('admin-link-container').classList.add('d-none');
+            document.getElementById('login-status').innerHTML = "Not Logged In";
+            document.getElementById('login-status').className = "text-danger small fw-bold";
+            document.getElementById('btn-launch').disabled = true;
+            
+            // Clear inputs and show modal forcefully
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('login-error').classList.add('d-none');
+            
+            const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('loginModal'));
+            modal.show();
+        };
+
+        // Launch Logic
+        document.getElementById('btn-launch').onclick = async () => {
+            if (!config.accountId) return; // Protected by disabled state anyway
+            
+            config.deviceId = document.getElementById('camera-select').value;
+            localStorage.setItem('pb_config', JSON.stringify(config));
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(e => console.log(e));
+            }
+            loadConfig();
+            switchView('attract');
+        };
+
+        function loadConfig() {
+            const saved = localStorage.getItem('pb_config');
+            if(saved) {
+                const parsed = JSON.parse(saved);
+                // Keep the currentAccountData safe from overwriting
+                const tempData = config.currentAccountData;
+                config = { ...config, ...parsed };
+                config.currentAccountData = tempData; 
+            }
+            
+            document.getElementById('display-event-name').innerText = config.text;
+            document.getElementById('qr-link-input').value = config.qrLink || '';
+            
+            if(config.layout === 'landscape') {
+                document.getElementById('layout-landscape').checked = true;
+            } else {
+                document.getElementById('layout-strip').checked = true;
+            }
+
+            if(typeof config.mirror !== 'undefined') {
+                document.getElementById('mirror-toggle').checked = config.mirror;
+            }
+            applyMirror();
+        }
+
+        // Booth Logic
+        document.getElementById('btn-start').onclick = () => {
+            photos = [];
+            runSequence(1);
+        };
+
+        function getTotalPhotos() {
+            return config.layout === 'landscape' ? 3 : 4;
+        }
+
+        function runSequence(shotNum) {
+            const total = getTotalPhotos();
+            if(shotNum > total) {
+                switchView('review');
+                renderReview();
+                return;
+            }
+
+            setupCaptureUI(shotNum, total);
+            
+            let count = 3;
+            const cntEl = document.getElementById('countdown-text');
+            const cntOverlay = document.getElementById('countdown-overlay');
+            cntOverlay.classList.remove('hidden');
+            cntEl.innerText = count;
+
+            const timer = setInterval(() => {
+                count--;
+                if(count > 0) {
+                    cntEl.innerText = count;
+                } else {
+                    clearInterval(timer);
+                    cntOverlay.classList.add('hidden');
+                    takePhoto(shotNum, false);
+                }
+            }, 1000);
+        }
+
+        function setupCaptureUI(shotNum, total) {
+            switchView('capture');
+            document.getElementById('current-shot-num').innerText = shotNum;
+            document.getElementById('total-shots-num').innerText = total;
+            
+            const dotsContainer = document.getElementById('dots-container');
+            dotsContainer.innerHTML = '';
+            for(let i=1; i<=total; i++) {
+                const dot = document.createElement('div');
+                dot.style.width = '1rem';
+                dot.style.height = '1rem';
+                dot.className = i < shotNum ? 'rounded-circle dot-filled' : (i===shotNum ? 'rounded-circle dot-active' : 'rounded-circle dot-empty');
+                dotsContainer.appendChild(dot);
+            }
+        }
+
+        function takePhoto(shotNum, isRetake) {
+            const flash = document.getElementById('flash-overlay');
+            flash.classList.remove('hidden');
+            flash.classList.add('animate-flash');
+            
+            const video = document.getElementById('capture-video');
+            const canvas = document.getElementById('crop-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const targetW = 1080;
+            const targetH = 660; 
+            const targetRatio = targetW / targetH;
+
+            canvas.width = targetW;
+            canvas.height = targetH;
+            
+            const vidW = video.videoWidth;
+            const vidH = video.videoHeight;
+            const vidRatio = vidW / vidH;
+            
+            let sW, sH, sX, sY;
+
+            if (vidRatio > targetRatio) {
+                sH = vidH;
+                sW = vidH * targetRatio;
+                sX = (vidW - sW) / 2;
+                sY = 0;
+            } else {
+                sW = vidW;
+                sH = vidW / targetRatio;
+                sX = 0;
+                sY = (vidH - sH) / 2;
+            }
+            
+            if (config.mirror) {
+                ctx.translate(targetW, 0);
+                ctx.scale(-1, 1);
+            }
+
+            ctx.drawImage(video, sX, sY, sW, sH, 0, 0, targetW, targetH);
+            
+            const data = canvas.toDataURL('image/jpeg', 0.9);
+            
+            if (isRetake) {
+                photos[shotNum - 1] = data;
+            } else {
+                photos.push(data);
+            }
+
+            setTimeout(() => {
+                flash.classList.remove('animate-flash');
+                flash.classList.add('hidden');
+                
+                if (isRetake) {
+                    switchView('review');
+                    renderReview();
+                } else {
+                    runSequence(shotNum + 1);
+                }
+            }, 500);
+        }
+
+        // --- REVIEW LOGIC ---
+        function renderReview() {
+            lucide.createIcons();
+            const grid = document.getElementById('review-grid');
+            grid.innerHTML = '';
+            
+            const colClass = config.layout === 'landscape' ? 'col-md-4' : 'col-md-6'; 
+
+            photos.forEach((src, idx) => {
+                const col = document.createElement('div');
+                col.className = `col-12 ${colClass}`;
+                col.innerHTML = `
+                    <div class="review-card">
+                        <img src="${src}">
+                        <div class="review-overlay" onclick="retakePhoto(${idx+1})">
+                            <button class="btn btn-warning fw-bold rounded-pill px-4 py-2"><i data-lucide="refresh-ccw" class="me-2"></i> Retake</button>
+                        </div>
+                    </div>
+                    <div class="text-center mt-2 text-white-50 fs-5">Photo ${idx+1}</div>
+                `;
+                grid.appendChild(col);
+            });
+            lucide.createIcons();
+        }
+
+        window.retakePhoto = (shotNum) => {
+            const total = getTotalPhotos();
+            setupCaptureUI(shotNum, total);
+            
+            let count = 3;
+            const cntEl = document.getElementById('countdown-text');
+            const cntOverlay = document.getElementById('countdown-overlay');
+            cntOverlay.classList.remove('hidden');
+            cntEl.innerText = count;
+
+            const timer = setInterval(() => {
+                count--;
+                if(count > 0) {
+                    cntEl.innerText = count;
+                } else {
+                    clearInterval(timer);
+                    cntOverlay.classList.add('hidden');
+                    takePhoto(shotNum, true);
+                }
+            }, 1000);
+        };
+
+        document.getElementById('btn-confirm-strip').onclick = () => {
+            switchView('processing');
+            setTimeout(generateResult, 1000);
+        };
+
+        // Customization Logic (New Carousel)
+        function setupStyleCarousel() {
+            updateCarouselUI();
+
+            document.getElementById('btn-prev-style').onclick = () => {
+                const container = document.getElementById('strip-container');
+                container.classList.add('slide-out-left');
+                setTimeout(() => {
+                    config.styleIndex = (config.styleIndex - 1 + stripStyles.length) % stripStyles.length;
+                    updateCarouselUI();
+                    generateResult(() => {
+                        container.classList.remove('slide-out-left');
+                        container.classList.add('slide-in-start-right');
+                        void container.offsetWidth; 
+                        container.classList.remove('slide-in-start-right');
+                    });
+                }, 200);
+            };
+
+            document.getElementById('btn-next-style').onclick = () => {
+                const container = document.getElementById('strip-container');
+                container.classList.add('slide-out-right');
+                setTimeout(() => {
+                    config.styleIndex = (config.styleIndex + 1) % stripStyles.length;
+                    updateCarouselUI();
+                    generateResult(() => {
+                        container.classList.remove('slide-out-right');
+                        container.classList.add('slide-in-start-left');
+                        void container.offsetWidth; 
+                        container.classList.remove('slide-in-start-left');
+                    });
+                }, 200);
+            };
+        }
+
+        function updateCarouselUI() {
+            const currentStyle = stripStyles[config.styleIndex];
+            document.getElementById('current-style-name').innerText = currentStyle.name;
+            const dotsContainer = document.getElementById('style-dots');
+            dotsContainer.innerHTML = '';
+            stripStyles.forEach((_, idx) => {
+                const dot = document.createElement('div');
+                dot.className = `rounded-circle ${idx === config.styleIndex ? 'bg-light' : 'bg-secondary'}`;
+                dot.style.width = '8px';
+                dot.style.height = '8px';
+                dotsContainer.appendChild(dot);
+            });
+        }
+
+        function generateResult(callback) {
+            const canvas = document.getElementById('final-canvas');
+            const ctx = canvas.getContext('2d');
+            const isLandscape = config.layout === 'landscape';
+
+            const W = isLandscape ? 1800 : 1200;
+            const H = isLandscape ? 1200 : 1800;
+            
+            const currentStyle = stripStyles[config.styleIndex] || stripStyles[0];
+
+            canvas.width = W;
+            canvas.height = H;
+
+            const photoPromises = photos.map(src => new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => { console.error("Failed to load photo"); resolve(null); }; 
+                img.src = src;
+            }));
+
+            let logoPromise = null;
+            if(config.mode === 'image' && config.logo) {
+                logoPromise = new Promise(resolve => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => { console.error("Failed to load logo"); resolve(null); };
+                    img.src = config.logo;
+                });
+            }
+
+            const allPromises = [...photoPromises];
+            if(logoPromise) allPromises.push(logoPromise);
+
+            Promise.all(allPromises).then(async (loadedImages) => {
+                const loadedPhotos = loadedImages.slice(0, photos.length);
+                const loadedLogo = logoPromise ? loadedImages[loadedImages.length - 1] : null;
+
+                currentStyle.draw(ctx, W, H);
+
+                if (isLandscape) {
+                    drawLandscapeLayout(ctx, W, H, loadedPhotos, loadedLogo, currentStyle);
+                } else {
+                    drawStripLayout(ctx, W, H, loadedPhotos, loadedLogo, currentStyle);
+                }
+
+                const finalData = canvas.toDataURL('image/jpeg', 1.0);
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `photobooth-${timestamp}.jpg`;
+
+                document.getElementById('final-image').src = finalData;
+                document.getElementById('print-img').src = finalData;
+                document.getElementById('print-desc').innerText = isLandscape ? "Your 4x6 print is ready (Single Copy)." : "Your 4x6 print is ready (Double Strip).";
+                
+                const btnDownload = document.getElementById('btn-save-strip');
+                btnDownload.dataset.src = finalData;
+                btnDownload.dataset.filename = filename;
+                
+                document.getElementById('auto-save-toast').classList.add('hidden'); 
+                
+                if (saveDirectoryHandle1 || saveDirectoryHandle2) {
+                    try {
+                        const res = await fetch(finalData);
+                        const blob = await res.blob();
+                        
+                        let savedCount = 0;
+                        if (saveDirectoryHandle1) {
+                            await saveToFolder(saveDirectoryHandle1, blob, filename);
+                            savedCount++;
+                        }
+                        if (saveDirectoryHandle2) {
+                            await saveToFolder(saveDirectoryHandle2, blob, filename);
+                            savedCount++;
+                        }
+
+                        if (savedCount > 0) {
+                            const toast = document.getElementById('auto-save-toast');
+                            toast.querySelector('div').innerText = `Auto-saved to ${savedCount} folder(s)!`;
+                            toast.classList.remove('hidden');
+                            setTimeout(() => toast.classList.add('hidden'), 5000);
+                        }
+                    } catch (err) {
+                        console.error("Auto-save failed", err);
+                    }
+                }
+                
+                setupStaticQR();
+
+                if(!document.getElementById('view-result').classList.contains('hidden')) {
+                    // already viewing
+                } else {
+                    switchView('result');
+                }
+
+                if(callback) callback();
+            }).catch(e => {
+                console.error("Fatal error in generation:", e);
+                alert("Error generating photos. Please try again.");
+                switchView('setup');
+            });
+        }
+
+        // --- DRAWING STRATEGIES ---
+
+        function drawStripLayout(ctx, W, H, photos, logo, style) {
+            const drawColumn = (offsetX) => {
+                const stripW = 600;
+                const margin = 30;
+                const innerW = stripW - (margin*2);
+                const photoH = 330;
+                const spacing = 30;
+                const topM = 50;
+
+                photos.forEach((img, i) => {
+                    if(!img) return; 
+                    const y = topM + (i * (photoH + spacing));
+                    ctx.save();
+                    ctx.fillStyle = style.borderColor;
+                    ctx.fillRect(offsetX + margin - 2, y - 2, innerW + 4, photoH + 4);
+                    ctx.restore();
+                    ctx.drawImage(img, offsetX + margin, y, innerW, photoH);
+                });
+
+                const logoY = 1550;
+                drawLogoOrText(ctx, offsetX + margin, logoY, innerW, 200, logo, style);
+            };
+
+            drawColumn(0);
+            drawColumn(600);
+            
+            ctx.beginPath();
+            ctx.setLineDash([20, 20]);
+            ctx.strokeStyle = style.cutLine;
+            ctx.lineWidth = 2;
+            ctx.moveTo(600, 0);
+            ctx.lineTo(600, 1800);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function drawLandscapeLayout(ctx, W, H, photos, logo, style) {
+            const margin = 60;
+            const gap = 40;
+            const cellW = (W - (margin*2) - gap) / 2;
+            const cellH = (H - (margin*2) - gap) / 2;
+            
+            const positions = [
+                { x: margin, y: margin }, // TL
+                { x: margin + cellW + gap, y: margin }, // TR
+                { x: margin, y: margin + cellH + gap }, // BL
+            ];
+            
+            photos.forEach((img, i) => {
+                if(!img || i >= 3) return;
+                const pos = positions[i];
+                
+                ctx.fillStyle = style.borderColor;
+                ctx.fillRect(pos.x - 4, pos.y - 4, cellW + 8, cellH + 8);
+                
+                const imgRatio = img.width / img.height;
+                const cellRatio = cellW / cellH;
+                
+                let dw, dh, dx, dy;
+                
+                if (imgRatio > cellRatio) {
+                     dw = cellW;
+                     dh = cellW / imgRatio;
+                     dx = pos.x;
+                     dy = pos.y + (cellH - dh)/2;
+                } else {
+                     dh = cellH;
+                     dw = cellH * imgRatio;
+                     dy = pos.y;
+                     dx = pos.x + (cellW - dw)/2;
+                }
+                
+                ctx.drawImage(img, dx, dy, dw, dh);
+            });
+
+            const logoAreaX = margin + cellW + gap;
+            const logoAreaY = margin + cellH + gap;
+            drawLogoOrText(ctx, logoAreaX, logoAreaY, cellW, cellH, logo, style, true);
+        }
+
+        function drawLogoOrText(ctx, x, y, w, h, logo, style, centered = false) {
+            if(config.mode === 'image' && logo) {
+                const scale = Math.min(w/logo.width, h/logo.height);
+                const lw = logo.width * scale;
+                const lh = logo.height * scale;
+                ctx.drawImage(logo, x + (w-lw)/2, y + (h-lh)/2, lw, lh);
+            } else {
+                ctx.fillStyle = style.textColor;
+                
+                const fontSize = centered ? 80 : 48;
+                ctx.font = `bold ${fontSize}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const centerX = x + w/2;
+                const centerY = centered ? y + h/2 - 20 : y + h/2;
+                
+                ctx.fillText(config.text, centerX, centerY);
+                
+                const dateSize = centered ? 32 : 24;
+                ctx.font = `${dateSize}px sans-serif`;
+                ctx.fillText(new Date().toLocaleDateString(), centerX, centerY + fontSize);
+            }
+        }
+
+        // New Save Handler
+        document.getElementById('btn-save-strip').onclick = async (e) => {
+            e.preventDefault();
+            const btn = e.currentTarget;
+            if(!btn.dataset.src) return;
+
+            const src = btn.dataset.src;
+            const filename = btn.dataset.filename;
+
+            if (saveDirectoryHandle1 || saveDirectoryHandle2) {
+                 try {
+                     const res = await fetch(src);
+                     const blob = await res.blob();
+                     
+                     let savedCount = 0;
+                     if (saveDirectoryHandle1) {
+                         if(await saveToFolder(saveDirectoryHandle1, blob, filename)) savedCount++;
+                     }
+                     if (saveDirectoryHandle2) {
+                         if(await saveToFolder(saveDirectoryHandle2, blob, filename)) savedCount++;
+                     }
+                     
+                     if (savedCount > 0) {
+                         const toast = document.getElementById('auto-save-toast');
+                         toast.querySelector('div').innerText = `Saved to ${savedCount} folder(s)!`;
+                         toast.classList.remove('hidden');
+                         setTimeout(() => toast.classList.add('hidden'), 3000);
+                     } else {
+                         alert("Failed to save to folders. Check permissions.");
+                     }
+                 } catch (err) {
+                     console.error("Save to folder failed", err);
+                     alert("Failed to save to folder. Try re-selecting the folder in setup.");
+                 }
+            } else {
+                 const link = document.createElement('a');
+                 link.href = src;
+                 link.download = filename;
+                 document.body.appendChild(link);
+                 link.click();
+                 document.body.removeChild(link);
+            }
+        };
+
+        document.getElementById('btn-new-session').onclick = () => {
+            switchView('attract');
+        };
+
+        init();
+    </script>
+</body>
+</html> 

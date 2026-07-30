@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KadaSnap - Download Your Photo</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(22, 30, 49, 0.75);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-color: #ffc107; /* Warning Gold */
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(255, 193, 7, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.08) 0px, transparent 50%);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h5, .font-heading {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 520px;
+        }
+
+        .brand-logo {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--accent-color);
+            text-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
+            letter-spacing: -1px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            margin-bottom: 0.5rem;
+        }
+
+        .code-input {
+            background: rgba(11, 15, 25, 0.8);
+            border: 2px solid var(--border-color);
+            border-radius: 1rem;
+            color: var(--text-primary);
+            font-family: monospace;
+            font-size: 2.2rem;
+            font-weight: bold;
+            letter-spacing: 0.5rem;
+            text-align: center;
+            padding: 0.75rem 1rem;
+            transition: all 0.25s ease;
+        }
+
+        .code-input:focus {
+            background: rgba(11, 15, 25, 0.9);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.15);
+            outline: none;
+        }
+
+        .btn-premium {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            border: none;
+            color: #0b0f19;
+            font-weight: 700;
+            border-radius: 1rem;
+            padding: 1rem 1.5rem;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
+            font-size: 1.1rem;
+        }
+
+        .btn-premium:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.35);
+            color: #0b0f19;
+        }
+
+        .btn-premium:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-premium:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: var(--text-secondary);
+            box-shadow: none;
+        }
+
+        /* Image Display */
+        .photo-preview-container {
+            border-radius: 1rem;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+            position: relative;
+            background-color: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            margin-bottom: 1.5rem;
+        }
+
+        .photo-preview {
+            width: 100%;
+            height: auto;
+            max-height: 55vh;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* Helpers */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Pulse Animation for loader */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .6; transform: scale(1.05); }
+        }
+        .animate-pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="glass-card p-4 p-md-5 text-center">
+        <!-- Logo -->
+        <div class="mb-4">
+            <a href="#" class="brand-logo">
+                <i data-lucide="camera" style="width: 2.5rem; height: 2.5rem;"></i>
+                KadaSnap
+            </a>
+            <p class="text-white-50 small">Enter your 6-digit code to download your event photos.</p>
+        </div>
+
+        <!-- SEARCH FORM SECTION -->
+        <div id="search-section">
+            <div class="mb-4">
+                <input type="text" id="code-input" class="form-control code-input w-100 mb-3" 
+                       placeholder="000000" maxlength="6" pattern="[0-9]*" inputmode="numeric">
+                <div id="search-error" class="alert alert-danger d-none py-2 px-3 small" role="alert">
+                    Code not found. Please double-check and try again.
+                </div>
+            </div>
+
+            <button id="btn-search" class="btn btn-premium w-100 py-3 d-flex align-items-center justify-content-center gap-2">
+                <i data-lucide="search" style="width: 20px; height: 20px;"></i> Find My Photo
+            </button>
+        </div>
+
+        <!-- LOADING SECTION -->
+        <div id="loading-section" class="py-5 hidden">
+            <div class="spinner-border text-warning mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <h5 class="fw-semibold text-white animate-pulse">Retrieving your photo...</h5>
+        </div>
+
+        <!-- RESULT SECTION -->
+        <div id="result-section" class="hidden">
+            <div class="photo-preview-container">
+                <img id="photo-preview" src="" alt="Photobooth Collage" class="photo-preview">
+            </div>
+
+            <div class="alert alert-info py-2 px-3 mb-4 text-start small border-secondary bg-dark text-white-50 d-flex gap-2">
+                <i data-lucide="info" class="text-warning flex-shrink-0" style="width: 18px; height: 18px;"></i>
+                <div>
+                    <strong>Mobile device?</strong> If the download button doesn't start instantly, press and hold the image to save it to your camera roll.
+                </div>
+            </div>
+
+            <div class="d-grid gap-3">
+                <button id="btn-download" class="btn btn-premium py-3 d-flex align-items-center justify-content-center gap-2">
+                    <i data-lucide="download" style="width: 22px; height: 22px;"></i> Download Photo
+                </button>
+
+                <button id="btn-back" class="btn btn-outline-light py-2 fs-6">
+                    <i data-lucide="arrow-left" class="me-1"></i> Retrieve Another Photo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Script Integrations -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+        // Firebase Configuration (Intact)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDAdCmovji9jlloPOKMxBC0WFhvSqHVtJQ",
+            authDomain: "photobooth-2026.firebaseapp.com",
+            projectId: "photobooth-2026",
+            storageBucket: "photobooth-2026.firebasestorage.app",
+            messagingSenderId: "510404188428",
+            appId: "1:510404188428:web:57296a9addce0fe8f81129"
+        };
+
+        const firebaseApp = initializeApp(firebaseConfig);
+        const db = getFirestore(firebaseApp);
+
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // DOM elements
+        const searchSection = document.getElementById('search-section');
+        const loadingSection = document.getElementById('loading-section');
+        const resultSection = document.getElementById('result-section');
+        
+        const codeInput = document.getElementById('code-input');
+        const btnSearch = document.getElementById('btn-search');
+        const searchError = document.getElementById('search-error');
+        
+        const photoPreview = document.getElementById('photo-preview');
+        const btnDownload = document.getElementById('btn-download');
+        const btnBack = document.getElementById('btn-back');
+
+        let activeImageUrl = null;
+
+        // Auto-fetch if code exists in URL
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            if (code && code.trim().length === 6) {
+                codeInput.value = code.trim();
+                triggerSearch(code.trim());
+            }
+        });
+
+        // Search trigger
+        btnSearch.onclick = () => {
+            const code = codeInput.value.trim();
+            if (code.length !== 6 || isNaN(code)) {
+                showError("Please enter a valid 6-digit code.");
+                return;
+            }
+            triggerSearch(code);
+        };
+
+        // Allow pressing Enter key
+        codeInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                btnSearch.click();
+            }
+        };
+
+        async function triggerSearch(code) {
+            hideError();
+            showLoading();
+
+            try {
+                const docRef = doc(db, "photos", code);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    activeImageUrl = data.imageUrl;
+
+                    // Display image
+                    photoPreview.src = activeImageUrl;
+
+                    photoPreview.onload = () => {
+                        hideLoading();
+                        showResult();
+                    };
+
+                    photoPreview.onerror = () => {
+                        hideLoading();
+                        showError("Failed to display the image. Please try downloading it directly.");
+                        showResult();
+                    };
+
+                } else {
+                    hideLoading();
+                    showError("Photo code not found. It might have expired or been entered incorrectly.");
+                }
+            } catch (err) {
+                console.error("Firestore lookup error", err);
+                hideLoading();
+                showError("A connection error occurred. Please check your internet connection.");
+            }
+        }
+
+        // Download image action
+        btnDownload.onclick = async () => {
+            if (!activeImageUrl) return;
+
+            // Update downloading button state
+            btnDownload.disabled = true;
+            btnDownload.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status"></span> Downloading...`;
+
+            try {
+                const res = await fetch(activeImageUrl);
+                if (!res.ok) throw new Error("CORS or network issue");
+                const blob = await res.blob();
+                const blobUrl = URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = `kadasnap-${codeInput.value.trim() || 'photo'}.jpg`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                URL.revokeObjectURL(blobUrl);
+            } catch (err) {
+                console.warn("Direct blob download failed, falling back to opening direct link:", err);
+                window.open(activeImageUrl, '_blank');
+            } finally {
+                btnDownload.disabled = false;
+                btnDownload.innerHTML = `<i data-lucide="download" style="width: 22px; height: 22px;"></i> Download Photo`;
+                lucide.createIcons();
+            }
+        };
+
+        // Back button
+        btnBack.onclick = () => {
+            activeImageUrl = null;
+            photoPreview.src = "";
+            codeInput.value = "";
+            
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            hideResult();
+            hideError();
+            searchSection.classList.remove('hidden');
+        };
+
+        // UI transitions helper
+        function showLoading() {
+            searchSection.classList.add('hidden');
+            resultSection.classList.add('hidden');
+            loadingSection.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            loadingSection.classList.add('hidden');
+        }
+
+        function showResult() {
+            searchSection.classList.add('hidden');
+            resultSection.classList.remove('hidden');
+        }
+
+        function hideResult() {
+            resultSection.classList.add('hidden');
+        }
+
+        function showError(msg) {
+            searchError.innerText = msg;
+            searchError.classList.remove('d-none');
+        }
+
+        function hideError() {
+            searchError.classList.add('d-none');
+        }
+    </script>
+</body>
+</html>
